@@ -1,13 +1,19 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 
 //middleware
-app.use(cors());
+app.use(cors({
+    origin: ["http://localhost:5173"],
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xyqwep0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -20,6 +26,24 @@ const client = new MongoClient(uri, {
     }
 });
 
+// my middleware
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+    console.log('Verifying token', token);
+    if (!token) {
+        return res.status(401).send({ message: 'Not authorized' });
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            console.log(err);
+            return res.status(401).send({ message: 'Not authorized' });
+        }
+        req.user = decoded;
+        next();
+    })
+
+};
+
 async function run() {
     try {
         // Connect the client to the server (optional starting in v4.7)
@@ -30,6 +54,19 @@ async function run() {
         const productCollection = database.collection("products");
         const orderCollection = database.collection("orders");
         const userCollection = database.collection("users");
+
+        //jwt authorization
+        app.post("/jwt", async (req, res) => {
+            const user = req.body;
+            console.log(user);
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            res
+                .cookie("token", token, {
+                    httpOnly: true,
+                    secure: false,
+                })
+                .send({ success: true });
+        });
 
         app.get("/services", async (req, res) => {
             const result = await serviceCollection.find().toArray();
@@ -90,9 +127,13 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/orders", async (req, res) => {
+        app.get("/orders", verifyToken, async (req, res) => {
             let query = {};
+            console.log("decoded token form verifyToken", req.user);
             if (req.query?.email) {
+                if (req.query.email !== req.user.email) {
+                    return res.status(403).send({ message: 'Forbidden' });
+                }
                 query = { email: req.query.email };
             }
             const result = await orderCollection.find(query).toArray();
@@ -103,6 +144,34 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await orderCollection.findOne(query);
+            res.send(result);
+        });
+
+        app.patch("/orders/:id", async (req, res) => {
+            const id = req.params.id;
+            const order = req.body;
+            console.log(id, order);
+            const filter = { _id: new ObjectId(id) };
+            const UpdatedOrder = {
+                $set: {
+                    order: {
+                        _id: order._id,
+                        title: order.title,
+                        img: order.img,
+                        price: order.price,
+                        status: order.status,
+                        type: order.type,
+                    }
+                }
+            };
+            const result = await orderCollection.updateOne(filter, UpdatedOrder);
+            res.send(result);
+        });
+
+        app.delete("/orders/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await orderCollection.deleteOne(query);
             res.send(result);
         });
 
@@ -125,9 +194,11 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/users", async (req, res) => {
-
+        app.get("/users", verifyToken, async (req, res) => {
             if (req.query?.email) {
+                if (req.query.email !== req.user.email) {
+                    return res.status(403).send({ message: 'Forbidden' });
+                }
                 const query = { email: req.query.email };
                 const result = await userCollection.findOne(query);
                 res.send(result);
@@ -138,12 +209,7 @@ async function run() {
             }
         });
 
-        app.delete("/orders/:id", async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await orderCollection.deleteOne(query);
-            res.send(result);
-        });
+
 
 
         // Send a ping to confirm a successful connection
