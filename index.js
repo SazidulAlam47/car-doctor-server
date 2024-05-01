@@ -59,7 +59,7 @@ async function run() {
         app.post("/jwt", async (req, res) => {
             const user = req.body;
             console.log(user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '10h' });
             res
                 .cookie("token", token, {
                     httpOnly: true,
@@ -120,7 +120,7 @@ async function run() {
             res.send(result);
         });
 
-        app.post("/orders", async (req, res) => {
+        app.post("/orders", verifyToken, async (req, res) => {
             const order = req.body;
             console.log(order);
             const result = await orderCollection.insertOne(order);
@@ -140,14 +140,17 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/orders/:id", async (req, res) => {
+        app.get("/orders/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await orderCollection.findOne(query);
+            if (result.email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden' });
+            }
             res.send(result);
         });
 
-        app.patch("/orders/:id", async (req, res) => {
+        app.patch("/orders/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
             const order = req.body;
             console.log(id, order);
@@ -168,14 +171,14 @@ async function run() {
             res.send(result);
         });
 
-        app.delete("/orders/:id", async (req, res) => {
+        app.delete("/orders/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await orderCollection.deleteOne(query);
             res.send(result);
         });
 
-        app.put("/users", async (req, res) => {
+        app.put("/users", verifyToken, async (req, res) => {
 
             const user = req.body;
             console.log(user);
