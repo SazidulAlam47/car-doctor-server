@@ -55,7 +55,7 @@ async function run() {
         const orderCollection = database.collection("orders");
         const userCollection = database.collection("users");
 
-        //jwt authorization
+        //jwt auth
         app.post("/jwt", async (req, res) => {
             const user = req.body;
             console.log(user);
@@ -68,6 +68,13 @@ async function run() {
                 .send({ success: true });
         });
 
+        app.get("/logout", async (req, res) => {
+            res.clearCookie("token")
+                .send({ success: true });
+        });
+
+
+        // services api
         app.get("/services", async (req, res) => {
             const result = await serviceCollection.find().toArray();
             res.send(result);
