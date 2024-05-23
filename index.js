@@ -165,21 +165,26 @@ async function run() {
         });
 
         app.get("/orders/:id", verifyToken, async (req, res) => {
-            const id = req.params.id;
+            try {
+                const id = req.params.id;
 
-            //check admin
-            const email = req.user?.email;
-            const queryAdmin = { email: email };
-            const user = await userCollection.findOne(queryAdmin);
-            const admin = user?.role === "admin";
-            console.log({ admin: admin });
+                //check admin
+                const email = req.user?.email;
+                const queryAdmin = { email: email };
+                const user = await userCollection.findOne(queryAdmin);
+                const admin = user?.role === "admin";
+                console.log({ admin: admin });
 
-            const query = { _id: new ObjectId(id) };
-            const result = await orderCollection.findOne(query);
-            if (result.email !== req.user.email && !admin) {
-                return res.status(403).send({ message: 'Forbidden' });
+                const query = { _id: new ObjectId(id) };
+                const result = await orderCollection.findOne(query);
+                if (result.email !== req.user.email && !admin) {
+                    return res.status(403).send({ message: 'Forbidden' });
+                }
+                res.send(result);
             }
-            res.send(result);
+            catch {
+                res.status(404).send({ message: 'Not Found' });
+            }
         });
 
         app.patch("/orders/:id", verifyToken, verifyAdmin, async (req, res) => {
@@ -272,7 +277,11 @@ async function run() {
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
+    }
+    catch {
+        console.log('some thing went wrong');
+    }
+    finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
     }
