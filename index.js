@@ -55,6 +55,21 @@ async function run() {
         const orderCollection = database.collection("orders");
         const userCollection = database.collection("users");
 
+        // admin check middleware
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.user?.email;
+            const query = { email: email };
+            const user = await userCollection.findOne(query);
+            const isAdmin = user?.role === "admin";
+            console.log({ isAdmin: isAdmin });
+            console.log("check email", email);
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'Forbidden' });
+            }
+            next();
+        };
+
+
         //jwt auth
         app.post("/jwt", async (req, res) => {
             const user = req.body;
@@ -134,30 +149,40 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/orders", verifyToken, async (req, res) => {
-            let query = {};
-            console.log("decoded token form verifyToken", req.user);
-            if (req.query?.email) {
-                if (req.query.email !== req.user.email) {
-                    return res.status(403).send({ message: 'Forbidden' });
-                }
-                query = { email: req.query.email };
+        app.get("/orders", verifyToken, verifyAdmin, async (req, res) => {
+            const result = await orderCollection.find().toArray();
+            res.send(result);
+        });
+
+        app.get("/orders/email/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden' });
             }
+            const query = { email: email };
             const result = await orderCollection.find(query).toArray();
             res.send(result);
         });
 
         app.get("/orders/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
+
+            //check admin
+            const email = req.user?.email;
+            const queryAdmin = { email: email };
+            const user = await userCollection.findOne(queryAdmin);
+            const admin = user?.role === "admin";
+            console.log({ admin: admin });
+
             const query = { _id: new ObjectId(id) };
             const result = await orderCollection.findOne(query);
-            if (result.email !== req.user.email) {
+            if (result.email !== req.user.email && !admin) {
                 return res.status(403).send({ message: 'Forbidden' });
             }
             res.send(result);
         });
 
-        app.patch("/orders/:id", verifyToken, async (req, res) => {
+        app.patch("/orders/:id", verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const order = req.body;
             console.log(id, order);
@@ -180,13 +205,24 @@ async function run() {
 
         app.delete("/orders/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
+
+            //check admin
+            const email = req.user?.email;
+            const queryAdmin = { email: email };
+            const user = await userCollection.findOne(queryAdmin);
+            const admin = user?.role === "admin";
+            console.log({ admin: admin });
+
             const query = { _id: new ObjectId(id) };
+            const order = await orderCollection.findOne(query);
+            if (order.email !== req.user.email && !admin) {
+                return res.status(403).send({ message: 'Forbidden' });
+            }
             const result = await orderCollection.deleteOne(query);
             res.send(result);
         });
 
-        app.put("/users", verifyToken, async (req, res) => {
-
+        app.patch("/users", verifyToken, async (req, res) => {
             const user = req.body;
             console.log(user);
             const filter = { email: user.email };
@@ -194,7 +230,6 @@ async function run() {
             const UpdatedUser = {
                 $set: {
                     name: user.name,
-                    email: user.email,
                     phone: user.phone,
                     phone2: user.phone2,
                     address: user.address,
@@ -204,19 +239,31 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/users", verifyToken, async (req, res) => {
-            if (req.query?.email) {
-                if (req.query.email !== req.user.email) {
-                    return res.status(403).send({ message: 'Forbidden' });
-                }
-                const query = { email: req.query.email };
-                const result = await userCollection.findOne(query);
-                res.send(result);
+        app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+            const result = await userCollection.find().toArray();
+            res.send(result);
+        });
+
+        app.get("/users/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden' });
             }
-            else {
-                const result = await userCollection.find().toArray();
-                res.send(result);
+            const query = { email: email };
+            const result = await userCollection.findOne(query);
+            res.send(result);
+        });
+
+        app.get("/users/admin/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            if (req.user?.email !== email) {
+                return res.status(403).send({ message: 'Forbidden' });
             }
+            const query = { email: email };
+            const user = await userCollection.findOne(query);
+            const admin = user.role === "admin";
+
+            res.send({ admin });
         });
 
 
