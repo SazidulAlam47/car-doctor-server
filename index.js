@@ -9,7 +9,7 @@ const port = process.env.PORT || 5000;
 
 //middleware
 app.use(cors({
-    origin: ["http://localhost:5173", "https://car-doctor-sazidulalam47.vercel.app/"],
+    origin: ["http://localhost:5173", "https://car-doctor-sazidulalam47.vercel.app"],
     credentials: true
 }));
 app.use(express.json());
@@ -79,6 +79,7 @@ async function run() {
                 .cookie("token", token, {
                     httpOnly: true,
                     secure: true,
+                    sameSite: "none",
                 })
                 .send({ success: true });
         });
